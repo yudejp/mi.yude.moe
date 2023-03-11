@@ -1,0 +1,6 @@
+redis
+files
+backup
+compressed
+.config/default.yml
+.config/docker.env

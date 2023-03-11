@@ -1,0 +1,74 @@
+version: "3"
+
+services:
+  web:
+    image: ghcr.io/yudejp/misskey:master
+    restart: always
+    links:
+      - db
+      - redis
+    volumes:
+      - ./files:/misskey/files
+      - ./.config/default.yml:/misskey/.config/default.yml:ro
+
+  redis:
+    restart: always
+    image: redis:4.0-alpine
+    volumes:
+      - ./redis:/data
+
+  db:
+    restart: always
+    image: postgres:12.2-alpine
+    env_file:
+      - .config/docker.env
+    ports:
+      - 5432:5432
+    volumes:
+      - socks:/var/run
+      - ./db:/var/lib/postgresql/data
+
+  nginx:
+    image: nginx:latest
+    container_name: misskey
+    links:
+      - web
+    volumes:
+      - ./nginx/misskey.conf:/etc/nginx/conf.d/misskey.conf
+    restart: always
+
+  cron-backup:
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.crontab
+    volumes:
+      - socks:/var/run
+      - type: bind
+        source: ./backup
+        target: /app/backup
+      - type: bind
+        source: ./compressed
+        target: /app/compressed
+      - type: bind
+        source: ./.config
+        target: /app/.config
+      - type: bind
+        source: ./redis
+        target: /app/redis
+      - type: bind
+        source: ./files
+        target: /app/files
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    user: root
+    restart: unless-stopped
+    links:
+      - nginx
+    command: tunnel --url http://nginx --no-chunked-encoding run mi.yude.moe
+    volumes:
+      - '/home/ubuntu/.cloudflared:/root/.cloudflared'
+
+volumes:
+  socks:
